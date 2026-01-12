@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { insertHistory } from '@/lib/dbWrk';
 
+export const dynamic = 'force-dynamic';
+
 // In-memory storage for wheel values (since we can't use WebSockets)
 // In production, you'd want to use Redis or a database for this
 let globalWheelValues = {

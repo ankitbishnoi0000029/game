@@ -131,7 +131,7 @@ export const GameLayout = () => {
 
 	// Trigger spin when 30 seconds left in round
 	const handleSpinTrigger = useCallback(() => {
-		if (roundTimeLeft === 30 && isGameActive && !spinner && !isWaiting) {
+		if (roundTimeLeft <= 30 && isGameActive && !spinner && !isWaiting) {
 			setSpinner(true);
 			setIsWaiting(true);
 
@@ -146,6 +146,23 @@ export const GameLayout = () => {
 	useEffect(() => {
 		handleSpinTrigger();
 	}, [handleSpinTrigger]);
+
+	// Update countdown timer for active game state (smooth seconds countdown)
+	useEffect(() => {
+		if (isGameActive && roundTimeLeft > 0) {
+			const interval = setInterval(() => {
+				setRoundTimeLeft(prev => {
+					if (prev <= 1) {
+						fetchGameState(); // Refresh when countdown reaches 0
+						return 0;
+					}
+					return prev - 1;
+				});
+			}, 1000);
+
+			return () => clearInterval(interval);
+		}
+	}, [isGameActive]); // Removed fetchGameState from dependencies to prevent resetting countdown
 
 	// Update countdown timer for game closed state
 	useEffect(() => {
@@ -162,7 +179,7 @@ export const GameLayout = () => {
 
 			return () => clearInterval(interval);
 		}
-	}, [gameClosed, timeUntilNextGame, fetchGameState]);
+	}, [gameClosed, fetchGameState]);
 
 
 
@@ -286,9 +303,9 @@ export const GameLayout = () => {
 				<div className='max-w-fit w-full grid grid-cols-1 lg:grid-cols-2 md:grid-cols-2 gap-12'>
 					{/* LEFT SIDE – WHEELS */}
 					<div className='space-y-5'>
-						{renderWheelSection('A', serverWheelValues.a1 ?? undefined, serverWheelValues.a2 ?? undefined, setA1, setA2, 'a1', 'a2')}
-						{renderWheelSection('B', serverWheelValues.b1 ?? undefined, serverWheelValues.b2 ?? undefined, setB1, setB2, 'b1', 'b2')}
-						{renderWheelSection('C', serverWheelValues.c1 ?? undefined, serverWheelValues.c2 ?? undefined, setC1, setC2, 'c1', 'c2')}
+						{renderWheelSection('A', spinner ? undefined : serverWheelValues.a1 ?? undefined, spinner ? undefined : serverWheelValues.a2 ?? undefined, setA1, setA2, 'a1', 'a2')}
+						{renderWheelSection('B', spinner ? undefined : serverWheelValues.b1 ?? undefined, spinner ? undefined : serverWheelValues.b2 ?? undefined, setB1, setB2, 'b1', 'b2')}
+						{renderWheelSection('C', spinner ? undefined : serverWheelValues.c1 ?? undefined, spinner ? undefined : serverWheelValues.c2 ?? undefined, setC1, setC2, 'c1', 'c2')}
 					</div>
 
 					{/* RIGHT SIDE – INFO PANEL */}
