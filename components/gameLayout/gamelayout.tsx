@@ -89,7 +89,11 @@ export const GameLayout = () => {
 
 	// Initialize socket connection
 	const initializeSocket = useCallback(() => {
-		const socketConnection = io('http://localhost:3000', {
+		const socketUrl = typeof window !== 'undefined'
+			? window.location.origin
+			: 'http://localhost:3000';
+
+		const socketConnection = io(socketUrl, {
 			path: '/api/socket'
 		});
 

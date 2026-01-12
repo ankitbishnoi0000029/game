@@ -1,7 +1,10 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Configure for serverless environment
+  experimental: {
+    serverComponentsExternalPackages: ['mysql2'],
+  },
 };
 
 export default nextConfig;
