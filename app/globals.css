@@ -24,3 +24,13 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+.bg-conic-gradient {
+  background: conic-gradient(
+    #22c55e 0deg 60deg,
+    #ec4899 60deg 120deg,
+    #facc15 120deg 180deg,
+    #22c55e 180deg 240deg,
+    #ec4899 240deg 300deg,
+    #3b82f6 300deg 360deg
+  );
+}
