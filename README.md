@@ -1,10 +1,10 @@
 # Game Project
 
-A real-time multiplayer game built with Next.js, Socket.IO, and MySQL.
+A real-time multiplayer game built with Next.js and MySQL.
 
 ## Features
 
-- Real-time game updates with Socket.IO
+- Real-time game updates with polling
 - User authentication with JWT
 - Game history and statistics
 - Responsive design with Tailwind CSS
@@ -91,21 +91,20 @@ This app requires a MySQL database. For production, use a cloud database service
 
 ### Important Notes
 
-- This app uses a custom Express server with Socket.IO for real-time functionality
-- The `vercel.json` configuration ensures Vercel treats this as a Node.js app rather than a Next.js app
-- Socket.IO connections are handled at the `/api/socket` path
-- The app is configured for serverless deployment with a 30-second function timeout
+- This app uses Next.js API routes for serverless functionality
+- Real-time updates are achieved through polling (client polls every 2 seconds)
+- The app is deployed as a standard Next.js application on Vercel
+- Game state and user selections are managed through RESTful API endpoints
 
 ## Project Structure
 
 ```
 ├── app/                    # Next.js app directory
-│   ├── api/               # API routes
+│   ├── api/               # API routes (game-state, user-selection)
 │   ├── history/           # History page
 │   └── login/             # Login page
 ├── components/            # React components
 ├── lib/                   # Database and utility functions
-├── server.js              # Custom Express server with Socket.IO
 ├── vercel.json            # Vercel deployment configuration
 └── package.json           # Dependencies and scripts
 ```
@@ -113,10 +112,17 @@ This app requires a MySQL database. For production, use a cloud database service
 ## Technologies Used
 
 - **Frontend**: Next.js 16, React 19, TypeScript, Tailwind CSS
-- **Backend**: Node.js, Express, Socket.IO
+- **Backend**: Next.js API Routes, Node.js
 - **Database**: MySQL
 - **Authentication**: JWT
+- **Real-time Updates**: Polling-based (API calls every 2 seconds)
 - **Deployment**: Vercel
+
+## Important Notes
+
+- **Real-time Functionality**: Due to Vercel's serverless limitations, this app uses polling instead of WebSockets for real-time updates. The client polls the server every 2 seconds for game state and wheel value updates.
+- **Database**: Requires a MySQL database (PlanetScale, AWS RDS, or similar cloud service).
+- **Game Timing**: The game runs from 9:00 AM to 9:00 PM IST (3:30 AM to 3:30 PM UTC) with 15-minute rounds.
 
 ## Troubleshooting
 
@@ -127,10 +133,10 @@ This app requires a MySQL database. For production, use a cloud database service
    - Verify your database allows connections from Vercel's IP ranges
    - Check database credentials and host URL
 
-2. **Socket.IO Connection Issues**
-   - Verify the Socket.IO path is configured correctly (`/api/socket`)
-   - Check browser console for connection errors
-   - Ensure CORS is properly configured
+2. **Real-time Update Issues**
+   - Check browser network tab to ensure API calls are working (should poll every 2 seconds)
+   - Verify API routes are responding correctly
+   - Check browser console for fetch errors
 
 3. **Build Failures**
    - Check Vercel deployment logs for specific error messages

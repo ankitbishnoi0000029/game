@@ -1,12 +1,9 @@
 "use client";
 import React, { useEffect, useState, useCallback } from "react";
 import CasinoSpinWheel3D from "../DrawBoard/SpinWheel";
-import { io, Socket } from 'socket.io-client';
 import { useRouter } from "next/navigation";
-import { insertHistory } from "@/lib/dbWrk";
 
 type WheelKey = "a1" | "a2" | "b1" | "b2" | "c1" | "c2";
-type SelectionType = "numeric" | "image" | "mixed";
 
 interface GameState {
   isActive: boolean;
@@ -14,15 +11,13 @@ interface GameState {
   timeUntilEnd?: number;
   currentRound?: number;
   roundTimeLeft?: number;
-  nextGameStart?: Date;
-  currentResults?: Record<WheelKey, number | null>;
+  nextGameStart?: string;
+  currentRoundData?: any;
 }
 
 export const GameLayout = () => {
-	const INITIAL_TIME = 15; // seconds
 	const digits = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
 
-	const [time, setTime] = useState<number>(INITIAL_TIME);
 	const [spinner, setSpinner] = useState(false);
 	const [isWaiting, setIsWaiting] = useState(false);
 	const [a1, setA1] = useState<number | undefined>(undefined);
@@ -32,31 +27,20 @@ export const GameLayout = () => {
 	const [c1, setC1] = useState<number | undefined>(undefined);
 	const [c2, setC2] = useState<number | undefined>(undefined);
 	const [results, setResults] = useState<Record<WheelKey, number | null>>({
-		a1: null,
-		a2: null,
-		b1: null,
-		b2: null,
-		c1: null,
-		c2: null,
+		a1: null, a2: null, b1: null, b2: null, c1: null, c2: null,
 	});
-	const [socket, setSocket] = useState<Socket | null>(null);
 	const [gameState, setGameState] = useState<GameState | null>(null);
 	const [currentRound, setCurrentRound] = useState<number>(1);
-	const [roundTimeLeft, setRoundTimeLeft] = useState<number>(15 * 60); // 2 minutes in seconds
+	const [roundTimeLeft, setRoundTimeLeft] = useState<number>(15 * 60);
 	const [isGameActive, setIsGameActive] = useState<boolean>(false);
 	const [gameClosed, setGameClosed] = useState<boolean>(false);
 	const [timeUntilNextGame, setTimeUntilNextGame] = useState<number>(0);
 	const [nextGameStart, setNextGameStart] = useState<Date | null>(null);
-	const [selectionType, setSelectionType] = useState<SelectionType>("numeric");
-	const [token,setToken] = useState<string>();
-	const [imageSelections, setImageSelections] = useState<Record<WheelKey, string>>({
-		a1: "", a2: "", b1: "", b2: "", c1: "", c2: ""
-	});
-	const [gameMode, setGameMode] = useState<"numeric" | "image" | "mixed">("numeric");
+	const [token, setToken] = useState<string>('');
 	const [serverWheelValues, setServerWheelValues] = useState<Record<WheelKey, number | null>>({
 		a1: null, a2: null, b1: null, b2: null, c1: null, c2: null
 	});
-    const route = useRouter()
+	const route = useRouter();
 
 	useEffect(() => {
 		const storedToken = sessionStorage.getItem("token");
@@ -72,45 +56,11 @@ export const GameLayout = () => {
 		return { minutes, seconds };
 	};
 
-	// Remove old countdown logic - now handled by server sync
-
-	// Handle wheel result callbacks
-	const handleWheelResult = useCallback((wheelKey: WheelKey) => (result: number) => {
-		setResults(prev => ({
-			...prev,
-			[wheelKey]: result
-		}));
-
-		// Emit result to server
-		if (socket) {
-			socket.emit('wheel-result', { wheel: wheelKey, result });
-		}
-	}, [socket]);
-
-	// Initialize socket connection
-	const initializeSocket = useCallback(() => {
-		const socketUrl = typeof window !== 'undefined'
-			? window.location.origin
-			: 'http://localhost:3000';
-
-		const socketConnection = io(socketUrl, {
-			path: '/api/socket'
-		});
-
-		setSocket(socketConnection);
-		return socketConnection;
-	}, []);
-
-	useEffect(() => {
-		const socketConnection = initializeSocket();
-
-		// Handle connection
-		socketConnection.on('connect', () => {
-			console.log('Connected to game server');
-		});
-
-		// Handle game state updates - sync all users to same state
-		socketConnection.on('game-state', (data) => {
+	// Poll for game state updates
+	const fetchGameState = useCallback(async () => {
+		try {
+			const response = await fetch('/api/game-state');
+			const data = await response.json();
 			setGameState(data);
 			setIsGameActive(data.isActive);
 			setGameClosed(!data.isActive);
@@ -119,111 +69,65 @@ export const GameLayout = () => {
 				setCurrentRound(data.currentRound || 1);
 				setRoundTimeLeft(data.roundTimeLeft || 15 * 60);
 			} else {
-				setTimeUntilNextGame(data.timeUntilStart || 0); // Already in seconds
-				setNextGameStart(data.nextGameStart || null);
+				setTimeUntilNextGame(data.timeUntilStart || 0);
+				setNextGameStart(data.nextGameStart ? new Date(data.nextGameStart) : null);
 			}
+		} catch (error) {
+			console.error('Failed to fetch game state:', error);
+		}
+	}, []);
 
-			// Sync current results
-			if (data.currentResults) {
-				setResults(data.currentResults);
-				
-			}
-		});
-
-		// Handle timer updates
-		socketConnection.on('game-timer', (data) => {
-			setRoundTimeLeft(data.roundTimeLeft || data.timeLeft);
-			setCurrentRound(data.roundNumber || 1);
-
-			// Check if game state is changing
-			const wasGameActive = isGameActive;
-			setIsGameActive(data.isActive);
-
-			// Only set gameClosed if game state is changing, not on every timer update
-			if (data.isActive !== wasGameActive) {
-				setGameClosed(data.gameClosed || !data.isActive);
-			}
-		});
-
-		// Handle game closure
-		socketConnection.on('game-closed', (data) => {
-			setGameClosed(true);
-			setIsGameActive(false);
-			setTimeUntilNextGame(data.timeUntilNextGame);
-			setNextGameStart(new Date(data.nextGameStart));
-		});
-
-		// Handle round start
-		socketConnection.on('round-start', (data) => {
-			setCurrentRound(data.roundNumber);
-			setRoundTimeLeft(data.duration);
-			setSpinner(false);
-			setIsWaiting(false);
-
-			// Update server wheel values for synchronized spinning
-			if (data.wheelValues) {
-				setServerWheelValues(data.wheelValues);
-				// console.log('Server wheel values updated:', data.wheelValues);
-			}
-
-			// Clear previous results
-			setResults({
-				a1: null, a2: null, b1: null, b2: null, c1: null, c2: null
-			});
-		});
-
-		// Handle wheel results from server
-		socketConnection.on('wheel-result', (data) => {
-			setResults(prev => ({
-				...prev,
-				[data.wheel]: data.result
-			}));
-		});
-
-		// Handle game results
-		socketConnection.on('game-result', (data) => {
-			setResults(prev => ({
-				...prev,
-				...data.results
-			}));
-		});
-
-		// Handle wheel values updates from other users
-		socketConnection.on('wheel-values-update', (data) => {
-			// console.log('Wheel values updated from server:', data);
+	// Poll for wheel values updates
+	const fetchWheelValues = useCallback(async () => {
+		try {
+			const response = await fetch('/api/user-selection');
+			const data = await response.json();
 			setServerWheelValues(data.wheelValues);
-		});
+		} catch (error) {
+			console.error('Failed to fetch wheel values:', error);
+		}
+	}, []);
 
-		// Handle round saved
-		socketConnection.on('round-saved', (data) => {
-			if (data.success) {
-				// Trigger save selections when round is saved
-			insertHistory({round_start_time:currentRound,a1:serverWheelValues.a1,a2:serverWheelValues.a2,b1:serverWheelValues.b1,b2:serverWheelValues.b2,c1:serverWheelValues.c1,c2:serverWheelValues.c2})
-				
-			}
-		});
-
-		return () => {
-			socketConnection.disconnect();
-		};
+	// Handle wheel result callbacks
+	const handleWheelResult = useCallback((wheelKey: WheelKey) => (result: number) => {
+		setResults(prev => ({
+			...prev,
+			[wheelKey]: result
+		}));
 	}, []);
 
 	// Send user selections to server
-	useEffect(() => {
-		if (socket && (a1 !== undefined || a2 !== undefined || b1 !== undefined || b2 !== undefined || c1 !== undefined || c2 !== undefined)) {
-			socket.emit('user-selection', {
-				a1, a2, b1, b2, c1, c2,
-				timestamp: Date.now()
-			});
+	const sendUserSelection = useCallback(async () => {
+		if (a1 !== undefined || a2 !== undefined || b1 !== undefined || b2 !== undefined || c1 !== undefined || c2 !== undefined) {
+			try {
+				await fetch('/api/user-selection', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ a1, a2, b1, b2, c1, c2 })
+				});
+			} catch (error) {
+				console.error('Failed to send user selection:', error);
+			}
 		}
-	}, [socket, a1, a2, b1, b2, c1, c2]);
+	}, [a1, a2, b1, b2, c1, c2]);
 
-	// Trigger save when 30 seconds before round end
+	// Initialize polling
 	useEffect(() => {
-		if (socket && roundTimeLeft === 30 && isGameActive) { // 30 seconds before round end
-			socket.emit('save-round', { roundNumber: currentRound });
-		}
-	}, [socket, roundTimeLeft, currentRound, isGameActive]);
+		fetchGameState();
+		fetchWheelValues();
+
+		const interval = setInterval(() => {
+			fetchGameState();
+			fetchWheelValues();
+		}, 2000); // Poll every 2 seconds
+
+		return () => clearInterval(interval);
+	}, [fetchGameState, fetchWheelValues]);
+
+	// Send selections when they change
+	useEffect(() => {
+		sendUserSelection();
+	}, [sendUserSelection]);
 
 	// Trigger spin when 30 seconds left in round
 	const handleSpinTrigger = useCallback(() => {
@@ -231,17 +135,13 @@ export const GameLayout = () => {
 			setSpinner(true);
 			setIsWaiting(true);
 
-			// Wait for spin animation, show results until round ends
+			// Wait for spin animation
 			setTimeout(() => {
 				setSpinner(false);
-				// Keep isWaiting true to show results until round ends
-				if (socket) {
-					socket.emit('round-complete', { roundNumber: currentRound });
-				}
-				// isWaiting will be reset by next round-start
-			}, 7200); // 7.2 seconds for spin animation (matches SpinWheel duration)
+				setIsWaiting(false);
+			}, 7200); // 7.2 seconds for spin animation
 		}
-	}, [roundTimeLeft, isGameActive, spinner, isWaiting, socket, currentRound]);
+	}, [roundTimeLeft, isGameActive, spinner, isWaiting]);
 
 	useEffect(() => {
 		handleSpinTrigger();
@@ -253,20 +153,16 @@ export const GameLayout = () => {
 			const interval = setInterval(() => {
 				setTimeUntilNextGame(prev => {
 					if (prev <= 1) {
-						// When countdown reaches 0, refresh from server
-						if (socket) {
-							socket.emit('get-game-state');
-						}
+						fetchGameState(); // Refresh when countdown reaches 0
 						return 0;
 					}
 					return prev - 1;
 				});
-				sessionStorage.removeItem('token')
 			}, 1000);
 
 			return () => clearInterval(interval);
 		}
-	}, [gameClosed, timeUntilNextGame, socket]);
+	}, [gameClosed, timeUntilNextGame, fetchGameState]);
 
 
 
