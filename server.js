@@ -5,7 +5,7 @@ import { Server } from 'socket.io';
 import { saveGameRound, updateGameRound, getCurrentGameRound, insertHistory } from './lib/dbWrk.js';
 
 const dev = process.env.NODE_ENV !== 'production';
-const hostname = process.env.VERCEL_URL ? '0.0.0.0' : 'localhost';
+const hostname = process.env.VERCEL_URL ? 'https://game-gamma-two-43.vercel.app/' : 'localhost';
 const port = process.env.PORT || 3000;
 
 // Game timing constants (in UTC)
